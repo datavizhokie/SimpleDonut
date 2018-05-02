@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+
+<head>
+    <meta charset="utf-8" />
+</head>
+  
+<style>
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  width: 960px;
+  height: 500px;
+  position: relative;
+}
+.title{
+  font-size:20px;
+  //text-anchor: middle;  
+}
+svg {
+	width: 100%;
+	height: 100%;
+}
+path.slice{
+	stroke-width:2px;
+}
+polyline{
+	opacity: .3;
+	stroke: black;
+	stroke-width: 2px;
+	fill: none;
+}
+.labelValue
+{
+	font-size: 60%;
+	opacity: .5;
+	
+}
+.toolTip {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    position: absolute;
+    display: none;
+    width: auto;
+    height: auto;
+    background: none repeat scroll 0 0 white;
+    border: 0 none;
+    border-radius: 8px 8px 8px 8px;
+    box-shadow: -3px 3px 15px #888888;
+    color: black;
+    font: 12px sans-serif;
+    padding: 5px;
+    text-align: center;
+}
+text {
+  font: 12px sans-serif;
+}
+middletext {
+  font: 16px sans-serif;
+}
+</style>
+  
+<body>
+
+<form>
+	<label><input type="radio" name="dataset" id="dataset" value="dataset1" checked> Category</label>
+	<label><input type="radio" name="dataset" id="dataset" value="dataset2"> Region</label>
+</form>
+<script src="d3-4.4.0.min.js"></script>
+    
+<script>
+d3.select("input[value=\"dataset1\"]").property("checked", true);
+var svg = d3.select("body")
+	.append("svg")
+	.append("g")
+svg.append("g")
+	.attr("class", "slices");
+svg.append("g")
+	.attr("class", "labelName");
+svg.append("g")
+	.attr("class", "labelValue");
+svg.append("g")
+	.attr("class", "lines");                
+
+/*d3.select("svg")
+		.append("text")
+		.attr("class","title")
+		.attr("x",width/2).attr("y",30)
+		.text("LLI Colorado Nominations");*/
+
+var width = 400;
+var height = 400;
+var radius = Math.min(width, height) / 3;
+
+var pie = d3.pie()
+		  .value(function(d) { return d.value; })
+		  .sort(null);
+
+var donutWidth = 55;
+
+var arc = d3.arc()
+	.innerRadius(radius - donutWidth)
+	.outerRadius(radius);
+
+
+var arcOver = d3.arc()
+	.innerRadius((radius - donutWidth)*1.2)
+	.outerRadius(radius * 1.2);
+
+var legendRectSize = 18;
+var legendSpacing = 4;
+
+var div = d3.select("body").append("div").attr("class", "toolTip");
+svg.attr("transform", "translate(" + width / 2 + "," + height / 2 + ")");
+
+var color = d3.scaleOrdinal(d3.schemeCategory20);
+	
+var dataset1 = [
+	{category: "Arts, Entertainment, Media, & Sports", value: 2},
+	{category: "Business, Innovation, Science, and Tech", value: 2},
+	{category: "Community Service & Philanthropy", value: 2},
+	{category: "Public Service", value: 2},   
+	{category: "Unsung Hero", value: 2},
+	{category: "Legacy", value: 2}
+];
+
+var dataset2 = [
+	{category:"Metro Denver", value:5}, 
+	{category:"Northern Colorado", value:1}, 
+	{category:"Southern Colorado", value:2},
+	{category:"Statewide", value:4}
+];
+
+change(dataset1);
+d3.selectAll("input")
+	.on("change", selectDataset);
+
+function selectDataset()
+	{
+		var value = this.value;
+		if (value == "dataset1")
+		{
+			change(dataset1);
+		}
+		else if (value == "dataset2")
+		{
+			change(dataset2);
+		}
+	}
+	
+function change(data) {		
+		
+	/* ------- PIE SLICES -------*/
+	var slice = svg.select(".slices").selectAll("path.slice")
+		.data(pie(data), function(d){ return d.category });
+	slice.enter()
+		.insert("path")
+		.style("fill", function(d) { return color(d.category); })
+		.attr("class", "slice")
+		.each(function(d){this._current = d;});
+	slice
+		.transition().duration(1000)
+		.attrTween("d", function(d) {
+			this._current = this._current || d;
+			var interpolate = d3.interpolate(this._current, d);
+			this._current = interpolate(0);
+			return function(t) {
+				return arc(interpolate(t));
+			};
+		})		  
+			
+	slice
+		.on('mouseover', function(d) {
+		//.on('mousemove', function(d) {
+			d3.select(this).transition()
+						   .duration(500)
+						   .attr("d", arcOver);
+			var total = d3.sum(data.map(function(d) {return d.value;}));
+			//console.log(total)
+			var percent = Math.round(1000 * d.value / total) / 10;
+			//console.log(d.value)
+			//console.log(percent)
+			div.style("left", d3.event.pageX+10+"px");
+	        div.style("top", d3.event.pageY-25+"px");
+	        div.style("display", "inline-block");
+	        div.html((d.label)+"<br>"+(d.value)+", "+(percent)+"%");
+	});
+						
+	slice
+		.on('mouseout', function() {
+			d3.select(this).transition()
+						   .duration(500)
+						   .attr("d", arc)
+			div.style("display", "none");
+	});
+	
+	slice.exit()
+		.remove();
+	
+	var ovl_total = d3.sum(data.map(function(d) {return d.value;}));
+	
+	svg.append("text")
+		.attr("text-anchor", "middle")
+		.attr("class","middletext")
+		 //.attr('font-size', '8em')
+		.attr('y', 0)
+		.text("Total: " + ovl_total);
+				  
+	/* ------- TEXT LABELS ------- */
+	/*var text = svg.select(".labelName").selectAll("text")
+		.data(pie(data), function(d){ return d.category });
+
+	text.enter()
+		.append("text")
+		.attr("dy", ".35em")
+		.text(function(d) {
+			return (d.data.category+": "+d.value+"%");
+		});
+
+	function midAngle(d){
+		return d.startAngle + (d.endAngle - d.startAngle)/2;
+	}
+
+	text
+		.transition().duration(1000)
+		.attrTween("transform", function(d) {
+			this._current = this._current || d;
+			var interpolate = d3.interpolate(this._current, d);
+			this._current = interpolate(0);
+			return function(t) {
+				var d2 = interpolate(t);
+				var pos = arc.centroid(d2);
+				pos[0] = radius * (midAngle(d2) < Math.PI ? 1 : -1);
+				return "translate("+ pos +")";
+			};
+		})
+		.styleTween("text-anchor", function(d){
+			this._current = this._current || d;
+			var interpolate = d3.interpolate(this._current, d);
+			this._current = interpolate(0);
+			return function(t) {
+				var d2 = interpolate(t);
+				return midAngle(d2) < Math.PI ? "start":"end";
+			};
+		})
+		.text(function(d) {
+			return (d.category+":" +d.value+"%");
+		});
+
+
+	text.exit()
+		.remove();*/
+
+	/* ------- SLICE TO TEXT POLYLINES -------*/
+
+	/*var polyline = svg.select(".lines").selectAll("polyline")
+		.data(pie(data), function(d){ return d.data.category });
+
+	polyline.enter()
+		.append("polyline");
+
+	polyline.transition().duration(500)
+		.attrTween("points", function(d){
+			this._current = this._current || d;
+			var interpolate = d3.interpolate(this._current, d);
+			this._current = interpolate(0);
+			return function(t) {
+				var d2 = interpolate(t);
+				var pos = arc.centroid(d2);
+				pos[0] = radius * 0.95 * (midAngle(d2) < Math.PI ? 1 : -1);
+				return [arc.centroid(d2), arc.centroid(d2), pos];
+			};
+		});
+
+	polyline.exit()
+		.remove();*/
+	};
+    </script>
+  </body>
+

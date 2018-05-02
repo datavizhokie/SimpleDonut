@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8">
+  <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css'>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tabletop.js/1.4.3/tabletop.js"></script>
+
+  <style>
+    body { margin:0;position:fixed;top:0;right:0;bottom:0;left:0; }
+    svg { width:100%; height: 100% }
+    h2 {font-family: Open Sans}
+
+.chart text {
+  fill: white;
+  font: 11px sans-serif;
+  text-anchor: end;
+}
+
+.axis {
+  font: 10px sans-serif;
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #969696;
+  shape-rendering: crispEdges;
+}
+
+.x.axis path {
+  display: none;
+}
+
+.limit-line {
+  stroke: #de2d26;
+  width: 3px;
+}
+.label {
+  font: 8px sans-serif;
+}
+.label2 {
+  font: 7px sans-serif;
+}
+
+.pd {
+  fill: #ff8c00;
+}
+.m5s {
+  fill: #ffff00;
+}
+.fi {
+  fill: #1e5fe0;
+}
+.ln {
+  fill: #008000;
+}
+.ncd-udc {
+  fill: #5d7f96;
+}
+.aet {
+  fill: #dc143c;
+}
+.fdl-an {
+  fill: #000080;
+}
+.gi-ve {
+  fill: #52d017;
+}
+.se {
+  fill: #52d017;
+}
+.idv {
+  fill: #ffd700;
+}
+.svp {
+  fill: #ffd700;
+}
+.ic-maie {
+  fill-opacity: #800080;
+}
+    
+  </style>
+</head>
+
+<body>
+  <h2>European Elections in Italy 2014</h2>
+  <script>
+   function drawChart(data) { //Tutto il codice d3js deve essere racchiuso da questa funzione che richiama Tabletop
+
+var names = [];
+for (i = 0; i < data.length; i++) {
+  names.push(data[i].name);
+}
+
+var margin = {top: 20, right: 20, bottom: 30, left: 40},
+    width = 600 - margin.left - margin.right,
+    height = 250 - margin.top - margin.bottom;
+
+var x = d3.scale.ordinal()
+    .rangeRoundBands([0, width], .25)
+    .domain(names);
+
+var y = d3.scale.linear()
+    .range([height, 0])
+    .domain([0,0.50]); //Qui si imposta la scala delle y
+
+var xAxis = d3.svg.axis()
+    .scale(x)
+    .orient("bottom");
+
+var yAxis = d3.svg.axis()
+    .scale(y)
+    .orient("left")
+    .ticks(5, "%");
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+
+
+svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + height + ")")
+      .call(xAxis);
+      
+  svg.append("g")
+      .attr("class", "y axis")
+      .call(yAxis)
+    .append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("y", 6)
+      .attr("dy", ".71em")
+      .style("text-anchor", "end");
+      //.text("Hlasy");
+
+  
+
+      svg.selectAll(".bar-chart")
+      .data(data)
+    .enter().append("rect")
+      .attr("class", function(d) {return "bar new " + d.friendly_name})
+      .attr("x", function(d) { return x(d.name); })
+      .attr("width", x.rangeBand())
+      .attr("y", function(d) { return y(d.result2014); })
+      .attr("height", function(d) { return height - y(d.result2014); })
+      .attr("title",function(d) {title = "2014: " + Math.round(100*d.result2014) + " %"; return title;});
+
+svg.append("line")
+    .attr("x1", 0)
+    .attr("y1", function() { return y(0.04) })
+    .attr("x2", width)
+    .attr("y2", function() { return y(0.04) })
+    .attr("class","limit-line");  
+    
+
+   svg.selectAll(".text")
+       .data(data)
+       .enter()
+       .append("text")
+       .text(function(d){return  Math.round(10000*d.result2014)/100 + "%";})
+       .attr("text-anchor", "middle")
+	    .attr("x", function(d, i) { return i * (width / data.length) + (width / data.length) / 2; })
+	    .attr("y", function(d) { return y(Math.max(d.result2014)) - 10; })
+	    .attr("class","label");
+	    
+  };
+  
+//Qui inizia lo script di tabletop
+var public_spreadsheet_url = 'https://docs.google.com/spreadsheets/d/1DbgtNoqzgEZwz1gobswzhCVh_KcJ29XFuDN_0BHdNpA/pubhtml'; //inserire qui il link al file di Google Sheet
+
+function renderSpreadsheetData() {
+    Tabletop.init( { key: public_spreadsheet_url,
+                     callback: draw,
+                     simpleSheet: true } )
+}
+
+function draw(data, tabletop) {
+  // draw chart
+  drawChart(data);
+}
+
+renderSpreadsheetData();
+//Qui finisce il codice di tabletop
+  </script>
+</body>

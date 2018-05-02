@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Coral bleaching summary per site</title>
+    <style type="text/css">
+        body {
+            font-family: sans-serif;
+            font-size: 10px;
+        }
+
+        .site-container {
+            width: 300px;
+            height: 300px;
+            text-align: center;
+        }
+
+        .arc-total {
+            fill: none;
+            stroke: #aaa;
+            stroke-width: 0.5;
+        }
+
+        .site-dropdown {
+            margin-top: 50px;
+        }
+
+        .arc-percent {
+            stroke: #aaa;
+            stroke-width: 0.5;
+        }
+
+        .generalist {
+            fill: #ccc;
+        }
+
+        .competitive {
+            fill: red;
+        }
+
+        .stress {
+            fill: steelblue;
+        }
+
+        .weedy {
+            fill: lightgreen;
+        }
+
+        .NA {
+            fill: none;
+        }
+
+        .overall-perc_bleached {
+            font-size: 38px;
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js" charset="utf-8"></script>
+<script>
+    var other_threshold = 9;
+    var lh_colors = {
+        "competitive": "competitive",
+        "stress tolerant": "stress",
+        "generalist": "generalist",
+        "weedy": "weedy",
+        "NA": "blank",
+        "": "blank"
+    };
+    var defaultsite = "KOL01";
+    var site_container, allsites, site_dropdown, allsitesdata;
+
+    var margin = {top: 0, right: 0, bottom: 30, left: 0};
+    var width = 300 - margin.left - margin.right,
+            height = 300 - margin.top - margin.bottom;
+
+    var radius = Math.min(width, height) / 2,
+            innerRadius = 0.3 * radius;
+
+    var pie = d3.layout.pie()
+            //        .sort(null)
+            .value(function (d) {
+                return d.total;
+            });
+
+    var arc_percent = d3.svg.arc()
+            .innerRadius(innerRadius)
+            .outerRadius(function (d) {
+                return (radius - innerRadius) * d.data.perc_bleached + innerRadius;
+            });
+
+    var arc_total = d3.svg.arc()
+            .innerRadius(innerRadius)
+            .outerRadius(radius);
+
+    var overall_container = d3.select("body")
+            .append("div")
+            .attr("id", "overall-container");
+
+    d3.csv("genus bleaching summary_by site_with life history.csv", ready);
+
+    function ready(err, data) {
+        if (err) throw err;
+
+        allsites = d3.set(data.map(function (d) {
+            return d.site;
+        })).values();
+        allsites.sort();
+
+        site_container = overall_container
+                .append("div")
+                .attr("class", "site-container");
+
+        site_dropdown = overall_container.append("div")
+                .attr("class", "site-dropdown")
+                .append("select");
+
+        site_dropdown.selectAll("option")
+                .data(allsites)
+                .enter()
+                .append("option")
+                .attr("value", function (d) { return d; })
+                .property("selected", function (d) { return d == defaultsite; })
+                .text(function (d) { return d; });
+
+        allsitesdata = data;
+        drawBleachingChart();
+
+        d3.selectAll(".site-dropdown")
+            .selectAll("select")
+            .on("change", updateBleachingChart);
+    }
+
+    function drawBleachingChart() {
+        site_container.html("");
+        var site = defaultsite;
+        if (typeof this.options !== 'undefined') {
+            site = this.options[this.selectedIndex].value;
+        }
+
+        site_container.append("h2")
+                .attr("class", "site-title")
+                .text(site);
+
+        var svg = site_container.append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform",
+                        "translate(" + (width + margin.left + margin.right) / 2 + "," + (height + margin.top + margin.bottom) / 2 + ")");
+
+        // filter by site; eventually source json will be only for this site
+        // assume data is already grouped by genus
+        var sitedata = allsitesdata.filter(function (d) { return d.site == site });
+        sitedata.forEach(function (d) {
+                    d.life_history = d.life_history.toLowerCase();
+                    d.total = +d.total;
+                    d.bleached = +d.bleached;
+                    d.perc_bleached = (d.total > 0) ? d.bleached / d.total : 0;
+                });
+        //TODO: version that aggregates (map/reduce?) by life history
+//        sitedata = d3.nest()
+//                .key(function(d) { return d.life_history })
+//                .entries(sitedata);
+//        console.log(sitedata);
+
+        // first sort by total # of colonies (? -- see if this should be by bleaching % instead)
+        sitedata.sort(function(a, b) {
+            return d3.descending(a.total, b.total);
+        });
+
+        var score =
+                sitedata.reduce(function (a, b) {
+                    return a + b.bleached;
+                }, 0) /
+                sitedata.reduce(function (a, b) {
+                    return a + b.total;
+                }, 0);
+
+        svg.append("text")
+                .attr("class", "overall-perc_bleached")
+                .attr("dy", ".35em")
+                .attr("text-anchor", "middle")
+                .text(Math.round(score * 100)); // + "%"
+
+        // group everything not in top n as "other"
+//        sitedata.forEach(function(d, i) {
+//            if (i < otherThreshold) d.genus = "other";
+//        });
+        var sitegenusdata = sitedata.slice(0, other_threshold);
+        var othergenusdata = sitedata.slice(other_threshold)
+                .reduce(function (a, b) {
+                    return {
+                        "genus": "other",
+                        "life_history": "",
+                        "total": a.total + b.total,
+                        "bleached": a.bleached + b.bleached
+                    };
+                });
+        othergenusdata["perc_bleached"] = (othergenusdata["total"] > 0) ? othergenusdata["bleached"] / othergenusdata["total"] : 0;
+
+        sitegenusdata = sitegenusdata.concat(othergenusdata);
+//        console.log(sitegenusdata);
+        //console.log(othergenusdata);
+
+        var outer_path = svg.selectAll(".arc-total")
+                .data(pie(sitegenusdata))
+                .enter()
+                .append("path")
+                .attr("class", "arc-total")
+                .attr("d", arc_total);
+
+        var inner_path = svg.selectAll(".arc-percent")
+                .data(pie(sitegenusdata))
+                .enter()
+                .append("path")
+                .attr("class", function(d) {
+                    return "arc-percent " + lh_colors[d.data.life_history];
+                })
+                .attr("d", arc_percent);
+    }
+
+
+  function updateBleachingChart() {
+
+        site = this.options[this.selectedIndex].value;
+        
+        d3.select(".site_conatiner").text(site);
+
+        // filter by site; eventually source json will be only for this site
+        // assume data is already grouped by genus
+        var sitedata = allsitesdata.filter(function (d) { return d.site == site });
+        sitedata.forEach(function (d) {
+                    d.life_history = d.life_history.toLowerCase();
+                    d.total = +d.total;
+                    d.bleached = +d.bleached;
+                    d.perc_bleached = (d.total > 0) ? d.bleached / d.total : 0;
+                });
+
+        // first sort by total # of colonies (? -- see if this should be by bleaching % instead)
+        sitedata.sort(function(a, b) {
+            return d3.descending(a.total, b.total);
+        });
+
+        var score =
+                sitedata.reduce(function (a, b) {
+                    return a + b.bleached;
+                }, 0) /
+                sitedata.reduce(function (a, b) {
+                    return a + b.total;
+                }, 0);
+
+        d3.selectAll(".overall-perc_bleached")
+                .text(Math.round(score * 100)); // + "%"
+
+        var sitegenusdata = sitedata.slice(0, other_threshold);
+        var othergenusdata = sitedata.slice(other_threshold)
+                .reduce(function (a, b) {
+                    return {
+                        "genus": "other",
+                        "life_history": "",
+                        "total": a.total + b.total,
+                        "bleached": a.bleached + b.bleached
+                    };
+                });
+        othergenusdata["perc_bleached"] = (othergenusdata["total"] > 0) ? othergenusdata["bleached"] / othergenusdata["total"] : 0;
+
+        sitegenusdata = sitegenusdata.concat(othergenusdata);
+
+        var outer_path = d3.selectAll(".arc-total")
+                .data(pie(sitegenusdata))
+
+            outer_path.exit().remove();
+
+            outer_path.enter()
+                .append("path")
+                .attr("class", "arc-total");
+
+            outer_path
+                .transition()
+                .attr("d", arc_total);
+
+        var inner_path = d3.selectAll(".arc-percent")
+                .data(pie(sitegenusdata));
+
+            inner_path.exit().remove();
+
+            inner_path.enter()
+                .append("path")
+                .attr("class", function(d) {
+                    return "arc-percent " + lh_colors[d.data.life_history];
+                })
+                .style("fill","green")
+
+            inner_path
+                .transition()
+                .ease("elastic")
+                .attr("d", arc_percent);
+    }
+</script>
+</body>
+</html>
